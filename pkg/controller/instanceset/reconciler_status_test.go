@@ -132,7 +132,7 @@ var _ = Describe("status reconciler test", func() {
 			Expect(its.Status.AvailableReplicas).Should(BeEquivalentTo(replicas))
 			Expect(its.Status.UpdatedReplicas).Should(BeEquivalentTo(0))
 			Expect(its.Status.CurrentReplicas).Should(BeEquivalentTo(replicas))
-			currentRevisions, _ := buildRevisions(currentRevisionMap)
+			currentRevisions, _ := BuildRevisions(currentRevisionMap)
 			Expect(its.Status.CurrentRevisions).Should(Equal(currentRevisions))
 
 			By("make all pods available with latest revision")
@@ -181,7 +181,7 @@ var _ = Describe("status reconciler test", func() {
 		})
 	})
 
-	Context("setMembersStatus function", func() {
+	Context("SetMembersStatus function", func() {
 		It("should work well", func() {
 			pods := []*corev1.Pod{
 				builder.NewPodBuilder(namespace, "pod-0").AddLabels(RoleLabelKey, "follower").GetObject(),
@@ -211,7 +211,7 @@ var _ = Describe("status reconciler test", func() {
 			replicas := int32(3)
 			its.Spec.Replicas = &replicas
 			its.Status.MembersStatus = oldMembersStatus
-			setMembersStatus(its, pods)
+			SetMembersStatus(its, pods)
 
 			Expect(its.Status.MembersStatus).Should(HaveLen(2))
 			Expect(its.Status.MembersStatus[0].PodName).Should(Equal("pod-1"))

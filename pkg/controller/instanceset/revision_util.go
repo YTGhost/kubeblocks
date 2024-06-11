@@ -182,7 +182,7 @@ func GetRevisions(revisions map[string]string) (map[string]string, error) {
 	return updateRevisions, nil
 }
 
-func buildRevisions(updateRevisions map[string]string) (map[string]string, error) {
+func BuildRevisions(updateRevisions map[string]string) (map[string]string, error) {
 	maxPlainRevisionCount := viper.GetInt(MaxPlainRevisionCount)
 	if len(updateRevisions) <= maxPlainRevisionCount {
 		return updateRevisions, nil

@@ -975,7 +975,7 @@ var _ = Describe("revision util test", func() {
 				"pod-3": "revision-3",
 				"pod-4": "revision-4",
 			}
-			revisions, err := buildRevisions(updateRevisions)
+			revisions, err := BuildRevisions(updateRevisions)
 			Expect(err).Should(BeNil())
 			decodeRevisions, err := GetRevisions(revisions)
 			Expect(err).Should(BeNil())

@@ -100,7 +100,7 @@ func (r *statusReconciler) Reconcile(tree *kubebuilderx.ObjectTree) (*kubebuilde
 	its.Status.AvailableReplicas = availableReplicas
 	its.Status.CurrentReplicas = currentReplicas
 	its.Status.UpdatedReplicas = updatedReplicas
-	its.Status.CurrentRevisions, _ = buildRevisions(currentRevisions)
+	its.Status.CurrentRevisions, _ = BuildRevisions(currentRevisions)
 	// all pods have been updated
 	totalReplicas := int32(1)
 	if its.Spec.Replicas != nil {
@@ -110,14 +110,14 @@ func (r *statusReconciler) Reconcile(tree *kubebuilderx.ObjectTree) (*kubebuilde
 		its.Status.CurrentRevision = its.Status.UpdateRevision
 		its.Status.CurrentReplicas = totalReplicas
 	}
-	readyCondition, err := buildReadyCondition(its, readyReplicas >= replicas, notReadyNames)
+	readyCondition, err := BuildReadyCondition(its, readyReplicas >= replicas, notReadyNames)
 	if err != nil {
 		return nil, err
 	}
 	meta.SetStatusCondition(&its.Status.Conditions, *readyCondition)
 
 	// 3. set InstanceFailure condition
-	failureCondition, err := buildFailureCondition(its, podList)
+	failureCondition, err := BuildFailureCondition(its, podList)
 	if err != nil {
 		return nil, err
 	}
@@ -128,16 +128,16 @@ func (r *statusReconciler) Reconcile(tree *kubebuilderx.ObjectTree) (*kubebuilde
 	}
 
 	// 4. set members status
-	setMembersStatus(its, podList)
+	SetMembersStatus(its, podList)
 
 	// 5. set readyWithoutPrimary
 	// TODO(free6om): should put this field to the spec
-	setReadyWithPrimary(its, podList)
+	SetReadyWithPrimary(its, podList)
 
 	return tree, nil
 }
 
-func buildReadyCondition(its *workloads.InstanceSet, ready bool, notReadyNames sets.Set[string]) (*metav1.Condition, error) {
+func BuildReadyCondition(its *workloads.InstanceSet, ready bool, notReadyNames sets.Set[string]) (*metav1.Condition, error) {
 	condition := &metav1.Condition{
 		Type:               string(workloads.InstanceReady),
 		Status:             metav1.ConditionTrue,
@@ -160,7 +160,7 @@ func buildReadyCondition(its *workloads.InstanceSet, ready bool, notReadyNames s
 	return condition, nil
 }
 
-func buildFailureCondition(its *workloads.InstanceSet, pods []*corev1.Pod) (*metav1.Condition, error) {
+func BuildFailureCondition(its *workloads.InstanceSet, pods []*corev1.Pod) (*metav1.Condition, error) {
 	var failureNames []string
 	for _, pod := range pods {
 		if isTerminating(pod) {
@@ -196,7 +196,7 @@ func buildFailureCondition(its *workloads.InstanceSet, pods []*corev1.Pod) (*met
 	}, nil
 }
 
-func setReadyWithPrimary(its *workloads.InstanceSet, pods []*corev1.Pod) {
+func SetReadyWithPrimary(its *workloads.InstanceSet, pods []*corev1.Pod) {
 	readyWithoutPrimary := false
 	for _, pod := range pods {
 		if value, ok := pod.Labels[constant.ReadyWithoutPrimaryKey]; ok && value == "true" {
@@ -207,7 +207,7 @@ func setReadyWithPrimary(its *workloads.InstanceSet, pods []*corev1.Pod) {
 	its.Status.ReadyWithoutPrimary = readyWithoutPrimary
 }
 
-func setMembersStatus(its *workloads.InstanceSet, pods []*corev1.Pod) {
+func SetMembersStatus(its *workloads.InstanceSet, pods []*corev1.Pod) {
 	// no roles defined
 	if its.Spec.Roles == nil {
 		return

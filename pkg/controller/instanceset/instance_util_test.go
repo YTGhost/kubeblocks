@@ -395,7 +395,7 @@ var _ = Describe("instance util test", func() {
 		It("should work well", func() {
 			parentName := "foo"
 			templateName := "bar"
-			templates := []*instanceTemplateExt{
+			templates := []*InstanceTemplateExt{
 				{
 					Name:     "",
 					Replicas: 2,
