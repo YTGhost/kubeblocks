@@ -130,7 +130,8 @@ func GenerateAllPodNames(
 	for i := range instances {
 		templates = append(templates, &instances[i])
 	}
-	return instanceset.GenerateAllInstanceNames(workloadName, compReplicas, templates, offlineInstances)
+	allInstanceNames, _ := instanceset.GenerateAllInstanceNames(workloadName, compReplicas, templates, offlineInstances, nil)
+	return allInstanceNames
 }
 
 // GenerateAllPodNamesToSet generate all pod names for a component

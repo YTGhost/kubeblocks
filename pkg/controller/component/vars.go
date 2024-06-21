@@ -1160,7 +1160,7 @@ func resolveComponentInstanceNamesRef(ctx context.Context, cli client.Reader, sy
 		for i := range comp.Spec.Instances {
 			templates = append(templates, &comp.Spec.Instances[i])
 		}
-		instanceNameList := instanceset.GenerateAllInstanceNames(comp.Name, comp.Spec.Replicas, templates, comp.Spec.OfflineInstances)
+		instanceNameList, _ := instanceset.GenerateAllInstanceNames(comp.Name, comp.Spec.Replicas, templates, comp.Spec.OfflineInstances, nil)
 		return &corev1.EnvVar{Name: defineKey, Value: strings.Join(instanceNameList, ",")}, nil
 	}
 	return resolveComponentVarRefLow(ctx, cli, synthesizedComp, selector, selector.InstanceNames, resolveInstanceNames)
@@ -1177,7 +1177,7 @@ func resolveComponentPodFQDNsRef(ctx context.Context, cli client.Reader, synthes
 		clusterDomainFn := func(name string) string {
 			return fmt.Sprintf("%s.%s", name, viper.GetString(constant.KubernetesClusterDomainEnv))
 		}
-		names := instanceset.GenerateAllInstanceNames(comp.Name, comp.Spec.Replicas, templates, comp.Spec.OfflineInstances)
+		names, _ := instanceset.GenerateAllInstanceNames(comp.Name, comp.Spec.Replicas, templates, comp.Spec.OfflineInstances, nil)
 		fqdn := func(name string) string {
 			return clusterDomainFn(fmt.Sprintf("%s.%s-headless.%s.svc", name, comp.Name, synthesizedComp.Namespace))
 		}

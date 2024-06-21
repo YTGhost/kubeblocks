@@ -286,5 +286,6 @@ func generatePodNamesByITS(its *workloads.InstanceSet) []string {
 	for i := range its.Spec.Instances {
 		templates = append(templates, &its.Spec.Instances[i])
 	}
-	return instanceset.GenerateAllInstanceNames(its.Name, *its.Spec.Replicas, templates, its.Spec.OfflineInstances)
+	allInstanceNames, _ := instanceset.GenerateAllInstanceNames(its.Name, *its.Spec.Replicas, templates, its.Spec.OfflineInstances, nil)
+	return allInstanceNames
 }

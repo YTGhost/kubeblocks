@@ -199,7 +199,11 @@ func buildInstanceName2TemplateMap(itsExt *instanceSetExt) (map[string]*instance
 	allNameTemplateMap := make(map[string]*instanceTemplateExt)
 	var instanceNameList []string
 	for _, template := range instanceTemplateList {
-		instanceNames := GenerateInstanceNamesFromTemplate(itsExt.its.Name, template.Name, template.Replicas, itsExt.its.Spec.OfflineInstances)
+		indexPoints, err := GetIndexPointsByTemplateName(itsExt.its.Spec.TemplatesIndexRanges, "")
+		if err != nil {
+			return nil, err
+		}
+		instanceNames := GenerateInstanceNamesFromTemplate(itsExt.its.Name, template.Name, template.Replicas, itsExt.its.Spec.OfflineInstances, indexPoints)
 		instanceNameList = append(instanceNameList, instanceNames...)
 		for _, name := range instanceNames {
 			allNameTemplateMap[name] = template
@@ -216,38 +220,67 @@ func buildInstanceName2TemplateMap(itsExt *instanceSetExt) (map[string]*instance
 	return allNameTemplateMap, nil
 }
 
-func GenerateAllInstanceNames(parentName string, replicas int32, templates []InstanceTemplate, offlineInstances []string) []string {
+func GenerateAllInstanceNames(parentName string, replicas int32, templates []InstanceTemplate, offlineInstances []string, templatesIndexRanges []workloads.InstanceTemplateIndexRanges) ([]string, error) {
 	totalReplicas := int32(0)
 	instanceNameList := make([]string, 0)
 	for _, template := range templates {
 		replicas := template.GetReplicas()
-		names := GenerateInstanceNamesFromTemplate(parentName, template.GetName(), replicas, offlineInstances)
+		indexPoints := make([]int32, 0)
+		var err error
+		if templatesIndexRanges != nil && len(indexPoints) > 0 {
+			indexPoints, err = GetIndexPointsByTemplateName(templatesIndexRanges, "")
+			if err != nil {
+				return nil, err
+			}
+		}
+		names := GenerateInstanceNamesFromTemplate(parentName, template.GetName(), replicas, offlineInstances, indexPoints)
 		instanceNameList = append(instanceNameList, names...)
 		totalReplicas += replicas
 	}
 	if totalReplicas < replicas {
-		names := GenerateInstanceNamesFromTemplate(parentName, "", replicas-totalReplicas, offlineInstances)
+		indexPoints := make([]int32, 0)
+		var err error
+		if templatesIndexRanges != nil && len(indexPoints) > 0 {
+			indexPoints, err = GetIndexPointsByTemplateName(templatesIndexRanges, "")
+			if err != nil {
+				return nil, err
+			}
+		}
+		names := GenerateInstanceNamesFromTemplate(parentName, "", replicas-totalReplicas, offlineInstances, indexPoints)
 		instanceNameList = append(instanceNameList, names...)
 	}
 	getNameNOrdinalFunc := func(i int) (string, int) {
 		return ParseParentNameAndOrdinal(instanceNameList[i])
 	}
 	baseSort(instanceNameList, getNameNOrdinalFunc, nil, true)
-	return instanceNameList
+	return instanceNameList, nil
 }
 
-func GenerateInstanceNamesFromTemplate(parentName, templateName string, replicas int32, offlineInstances []string) []string {
-	instanceNames, _ := GenerateInstanceNames(parentName, templateName, replicas, 0, offlineInstances)
+func GenerateInstanceNamesFromTemplate(parentName, templateName string, replicas int32, offlineInstances []string, indexPoints []int32) []string {
+	instanceNames := GenerateInstanceNames(parentName, templateName, replicas, 0, offlineInstances, indexPoints)
 	return instanceNames
 }
 
 // GenerateInstanceNames generates instance names based on certain rules:
 // The naming convention for instances (pods) based on the Parent Name, InstanceTemplate Name, and ordinal.
 // The constructed instance name follows the pattern: $(parent.name)-$(template.name)-$(ordinal).
+// If the user specifies indexRanges, then only use indexRanges to generate instance names.
 func GenerateInstanceNames(parentName, templateName string,
-	replicas int32, ordinal int32, offlineInstances []string) ([]string, int32) {
-	usedNames := sets.New(offlineInstances...)
+	replicas int32, ordinal int32, offlineInstances []string, indexPoints []int32) []string {
 	var instanceNameList []string
+	if indexPoints != nil && len(indexPoints) > 0 {
+		for indexPoint := range indexPoints {
+			var name string
+			if len(templateName) == 0 {
+				name = fmt.Sprintf("%s-%d", parentName, indexPoint)
+			} else {
+				name = fmt.Sprintf("%s-%s-%d", parentName, templateName, indexPoint)
+			}
+			instanceNameList = append(instanceNameList, name)
+		}
+		return instanceNameList
+	}
+	usedNames := sets.New(offlineInstances...)
 	for count := int32(0); count < replicas; count++ {
 		var name string
 		for {
@@ -263,7 +296,59 @@ func GenerateInstanceNames(parentName, templateName string,
 			}
 		}
 	}
-	return instanceNameList, ordinal
+	return instanceNameList
+}
+
+func GetIndexPointsByTemplateName(TemplatesIndexRanges []workloads.InstanceTemplateIndexRanges, name string) ([]int32, error) {
+	indexRanges, err := GetTemplateIndexRangesByTemplateName(TemplatesIndexRanges, name)
+	if err != nil {
+		return nil, err
+	}
+	return ConvertIndexRangesToIndexPoints(indexRanges)
+}
+
+func GetTemplateIndexRangesByTemplateName(TemplatesIndexRanges []workloads.InstanceTemplateIndexRanges, name string) ([]string, error) {
+	for _, templateIndexRanges := range TemplatesIndexRanges {
+		if templateIndexRanges.Name == name {
+			return templateIndexRanges.IndexRanges, nil
+		}
+	}
+	return nil, fmt.Errorf("template %s not found", name)
+}
+
+func ConvertIndexRangesToIndexPoints(indexRanges []string) ([]int32, error) {
+	indexPoints := sets.Set[int32]{}
+	var indexPointsList []int32
+	for _, segment := range indexRanges {
+		segmentNumbers := strings.Split(segment, "-")
+		if len(segmentNumbers) != 2 {
+			return indexPointsList, fmt.Errorf("indexRanges must have only one - character, but now have %v", len(segmentNumbers))
+		}
+
+		var leftNumber, rightNumber int
+		var err error
+
+		leftNumber, err = strconv.Atoi(segmentNumbers[0])
+		if err != nil {
+			return indexPointsList, fmt.Errorf("indexRanges's leftNumber must is number character, but now is %v and err is %v", segmentNumbers[0], err)
+		}
+		rightNumber, err = strconv.Atoi(segmentNumbers[1])
+		if err != nil {
+			return indexPointsList, fmt.Errorf("indexRanges's rightNumber must is number character, but now is %v and err is %v", segmentNumbers[1], err)
+		}
+
+		if leftNumber > rightNumber {
+			return indexPointsList, fmt.Errorf("indexRanges's rightNumber(%v) must >= leftNumber(%v)", rightNumber, leftNumber)
+		}
+
+		for traverseIndex := leftNumber; traverseIndex <= rightNumber; traverseIndex++ {
+			indexPoints.Insert(int32(traverseIndex))
+		}
+	}
+	for indexPoint := range indexPoints {
+		indexPointsList = append(indexPointsList, indexPoint)
+	}
+	return indexPointsList, nil
 }
 
 func buildInstanceByTemplate(name string, template *instanceTemplateExt, parent *workloads.InstanceSet, revision string) (*instance, error) {

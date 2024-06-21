@@ -277,6 +277,34 @@ spec:
                 - password
                 - username
                 type: object
+              indexRanges:
+                description: |-
+                  Specifies the desired IndexRanges of each InstanceTemplate.
+                  The IndexRanges is used to specify the ordinal of the instance (pod) names to be generated under an InstanceTemplate.
+
+
+                  For example, if IndexRanges are ["0-1", "7-7"], then the instance names generated under this InstanceTemplate would be
+                  $(cluster.name)-$(component.name)-$(template.name)-0、$(cluster.name)-$(component.name)-$(template.name)-1 and
+                  $(cluster.name)-$(component.name)-$(template.name)-7
+                items:
+                  description: InstanceTemplateIndexRanges defines the desired IndexRanges
+                    of InstanceTemplate
+                  properties:
+                    indexRanges:
+                      description: Defines IndexRanges for this template.
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name, the name of the InstanceTemplate.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               instances:
                 description: |-
                   Overrides values in default Template.

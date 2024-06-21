@@ -410,7 +410,7 @@ var _ = Describe("instance util test", func() {
 
 			var instanceNameList []string
 			for _, template := range templates {
-				instanceNames := GenerateInstanceNamesFromTemplate(parentName, template.Name, template.Replicas, offlineInstances)
+				instanceNames := GenerateInstanceNamesFromTemplate(parentName, template.Name, template.Replicas, offlineInstances, nil)
 				instanceNameList = append(instanceNameList, instanceNames...)
 			}
 			getNameNOrdinalFunc := func(i int) (string, int) {
@@ -436,7 +436,8 @@ var _ = Describe("instance util test", func() {
 			var templates []InstanceTemplate
 			templates = append(templates, templatesFoo, templateBar)
 			offlineInstances := []string{"foo-bar-1", "foo-0"}
-			instanceNameList := GenerateAllInstanceNames(parentName, 5, templates, offlineInstances)
+			instanceNameList, err := GenerateAllInstanceNames(parentName, 5, templates, offlineInstances, nil)
+			Expect(err).Should(BeNil())
 
 			podNamesExpected := []string{"foo-1", "foo-2", "foo-bar-0", "foo-bar-2", "foo-foo-0"}
 			Expect(instanceNameList).Should(Equal(podNamesExpected))
