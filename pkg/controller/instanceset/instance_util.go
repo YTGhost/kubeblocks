@@ -51,16 +51,16 @@ type InstanceTemplate interface {
 	GetReplicas() int32
 }
 
-type instanceTemplateExt struct {
+type InstanceTemplateExt struct {
 	Name     string
 	Replicas int32
 	corev1.PodTemplateSpec
 	VolumeClaimTemplates []corev1.PersistentVolumeClaim
 }
 
-type instanceSetExt struct {
-	its               *workloads.InstanceSet
-	instanceTemplates []*workloads.InstanceTemplate
+type InstanceSetExt struct {
+	Its               *workloads.InstanceSet
+	InstanceTemplates []*workloads.InstanceTemplate
 }
 
 var instanceNameRegex = regexp.MustCompile("(.*)-([0-9]+)$")
@@ -194,16 +194,16 @@ func ValidateDupInstanceNames[T any](instances []T, getNameFunc func(item T) str
 	return nil
 }
 
-func buildInstanceName2TemplateMap(itsExt *instanceSetExt) (map[string]*instanceTemplateExt, error) {
-	instanceTemplateList := buildInstanceTemplateExts(itsExt)
-	allNameTemplateMap := make(map[string]*instanceTemplateExt)
+func buildInstanceName2TemplateMap(itsExt *InstanceSetExt) (map[string]*InstanceTemplateExt, error) {
+	instanceTemplateList := BuildInstanceTemplateExts(itsExt)
+	allNameTemplateMap := make(map[string]*InstanceTemplateExt)
 	var instanceNameList []string
 	for _, template := range instanceTemplateList {
-		indexPoints, err := GetIndexPointsByTemplateName(itsExt.its.Spec.TemplatesIndexRanges, "")
+		indexPoints, err := GetIndexPointsByTemplateName(itsExt.Its.Spec.TemplatesIndexRanges, "")
 		if err != nil {
 			return nil, err
 		}
-		instanceNames := GenerateInstanceNamesFromTemplate(itsExt.its.Name, template.Name, template.Replicas, itsExt.its.Spec.OfflineInstances, indexPoints)
+		instanceNames := GenerateInstanceNamesFromTemplate(itsExt.Its.Name, template.Name, template.Replicas, itsExt.Its.Spec.OfflineInstances, indexPoints)
 		instanceNameList = append(instanceNameList, instanceNames...)
 		for _, name := range instanceNames {
 			allNameTemplateMap[name] = template
@@ -351,7 +351,7 @@ func ConvertIndexRangesToIndexPoints(indexRanges []string) ([]int32, error) {
 	return indexPointsList, nil
 }
 
-func buildInstanceByTemplate(name string, template *instanceTemplateExt, parent *workloads.InstanceSet, revision string) (*instance, error) {
+func buildInstanceByTemplate(name string, template *InstanceTemplateExt, parent *workloads.InstanceSet, revision string) (*instance, error) {
 	// 1. build a pod from template
 	var err error
 	if len(revision) == 0 {
@@ -418,7 +418,7 @@ func buildInstanceByTemplate(name string, template *instanceTemplateExt, parent 
 	return inst, nil
 }
 
-func buildInstancePVCByTemplate(name string, template *instanceTemplateExt, parent *workloads.InstanceSet) []*corev1.PersistentVolumeClaim {
+func buildInstancePVCByTemplate(name string, template *InstanceTemplateExt, parent *workloads.InstanceSet) []*corev1.PersistentVolumeClaim {
 	// 2. build pvcs from template
 	var pvcs []*corev1.PersistentVolumeClaim
 	labels := getMatchLabels(parent.Name)
@@ -517,7 +517,7 @@ func validateSpec(its *workloads.InstanceSet, tree *kubebuilderx.ObjectTree) err
 		return err
 	}
 	templateNames := sets.New[string]()
-	for _, template := range itsExt.instanceTemplates {
+	for _, template := range itsExt.InstanceTemplates {
 		replicas := int32(1)
 		if template.Replicas != nil {
 			replicas = *template.Replicas
@@ -560,23 +560,23 @@ func BuildInstanceTemplateRevision(template *corev1.PodTemplateSpec, parent *wor
 	return cr.Labels[ControllerRevisionHashLabel], nil
 }
 
-func buildInstanceTemplateExts(itsExt *instanceSetExt) []*instanceTemplateExt {
-	envConfigName := GetEnvConfigMapName(itsExt.its.Name)
-	defaultTemplate := BuildPodTemplate(itsExt.its, envConfigName)
-	makeInstanceTemplateExt := func(templateName string) *instanceTemplateExt {
+func BuildInstanceTemplateExts(itsExt *InstanceSetExt) []*InstanceTemplateExt {
+	envConfigName := GetEnvConfigMapName(itsExt.Its.Name)
+	defaultTemplate := BuildPodTemplate(itsExt.Its, envConfigName)
+	makeInstanceTemplateExt := func(templateName string) *InstanceTemplateExt {
 		var claims []corev1.PersistentVolumeClaim
-		for _, template := range itsExt.its.Spec.VolumeClaimTemplates {
+		for _, template := range itsExt.Its.Spec.VolumeClaimTemplates {
 			claims = append(claims, *template.DeepCopy())
 		}
-		return &instanceTemplateExt{
+		return &InstanceTemplateExt{
 			Name:                 templateName,
 			PodTemplateSpec:      *defaultTemplate.DeepCopy(),
 			VolumeClaimTemplates: claims,
 		}
 	}
 
-	var instanceTemplateExtList []*instanceTemplateExt
-	for _, template := range itsExt.instanceTemplates {
+	var instanceTemplateExtList []*InstanceTemplateExt
+	for _, template := range itsExt.InstanceTemplates {
 		templateExt := makeInstanceTemplateExt(template.Name)
 		buildInstanceTemplateExt(*template, templateExt)
 		instanceTemplateExtList = append(instanceTemplateExtList, templateExt)
@@ -584,7 +584,7 @@ func buildInstanceTemplateExts(itsExt *instanceSetExt) []*instanceTemplateExt {
 	return instanceTemplateExtList
 }
 
-func buildInstanceTemplates(totalReplicas int32, instances []workloads.InstanceTemplate, instancesCompressed *corev1.ConfigMap) []*workloads.InstanceTemplate {
+func BuildInstanceTemplates(totalReplicas int32, instances []workloads.InstanceTemplate, instancesCompressed *corev1.ConfigMap) []*workloads.InstanceTemplate {
 	var instanceTemplateList []*workloads.InstanceTemplate
 	var replicasInTemplates int32
 	instanceTemplates := getInstanceTemplates(instances, instancesCompressed)
@@ -669,7 +669,7 @@ func findTemplateObject(its *workloads.InstanceSet, tree *kubebuilderx.ObjectTre
 	return nil, nil
 }
 
-func buildInstanceTemplateExt(template workloads.InstanceTemplate, templateExt *instanceTemplateExt) {
+func buildInstanceTemplateExt(template workloads.InstanceTemplate, templateExt *InstanceTemplateExt) {
 	templateExt.Name = template.Name
 	replicas := int32(1)
 	if template.Replicas != nil {
@@ -854,16 +854,16 @@ func mergeNodeAffinity(nodeAffinity1Ptr, nodeAffinity2Ptr **corev1.NodeAffinity)
 		})
 }
 
-func buildInstanceSetExt(its *workloads.InstanceSet, tree *kubebuilderx.ObjectTree) (*instanceSetExt, error) {
+func buildInstanceSetExt(its *workloads.InstanceSet, tree *kubebuilderx.ObjectTree) (*InstanceSetExt, error) {
 	instancesCompressed, err := findTemplateObject(its, tree)
 	if err != nil {
 		return nil, err
 	}
 
-	instanceTemplateList := buildInstanceTemplates(*its.Spec.Replicas, its.Spec.Instances, instancesCompressed)
+	instanceTemplateList := BuildInstanceTemplates(*its.Spec.Replicas, its.Spec.Instances, instancesCompressed)
 
-	return &instanceSetExt{
-		its:               its,
-		instanceTemplates: instanceTemplateList,
+	return &InstanceSetExt{
+		Its:               its,
+		InstanceTemplates: instanceTemplateList,
 	}, nil
 }

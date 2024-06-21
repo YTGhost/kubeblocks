@@ -59,16 +59,16 @@ func (r *revisionUpdateReconciler) Reconcile(tree *kubebuilderx.ObjectTree) (*ku
 	}
 
 	// 1. build all templates by applying instance template overrides to default pod template
-	instanceTemplateList := buildInstanceTemplateExts(itsExt)
+	instanceTemplateList := BuildInstanceTemplateExts(itsExt)
 
 	// build instance revision list from instance templates
 	var instanceRevisionList []instanceRevision
 	for _, template := range instanceTemplateList {
-		indexPoints, err := GetIndexPointsByTemplateName(itsExt.its.Spec.TemplatesIndexRanges, "")
+		indexPoints, err := GetIndexPointsByTemplateName(itsExt.Its.Spec.TemplatesIndexRanges, "")
 		if err != nil {
 			return nil, err
 		}
-		instanceNames := GenerateInstanceNamesFromTemplate(its.Name, template.Name, template.Replicas, itsExt.its.Spec.OfflineInstances, indexPoints)
+		instanceNames := GenerateInstanceNamesFromTemplate(its.Name, template.Name, template.Replicas, itsExt.Its.Spec.OfflineInstances, indexPoints)
 		revision, err := BuildInstanceTemplateRevision(&template.PodTemplateSpec, its)
 		if err != nil {
 			return nil, err
