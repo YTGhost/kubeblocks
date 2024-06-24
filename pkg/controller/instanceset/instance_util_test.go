@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -410,7 +411,7 @@ var _ = Describe("instance util test", func() {
 
 			var instanceNameList []string
 			for _, template := range templates {
-				instanceNames := GenerateInstanceNamesFromTemplate(parentName, template.Name, template.Replicas, offlineInstances)
+				instanceNames := GenerateInstanceNamesFromTemplate(parentName, template.Name, template.Replicas, offlineInstances, nil)
 				instanceNameList = append(instanceNameList, instanceNames...)
 			}
 			getNameNOrdinalFunc := func(i int) (string, int) {
@@ -440,6 +441,184 @@ var _ = Describe("instance util test", func() {
 
 			podNamesExpected := []string{"foo-1", "foo-2", "foo-bar-0", "foo-bar-2", "foo-foo-0"}
 			Expect(instanceNameList).Should(Equal(podNamesExpected))
+		})
+	})
+
+	Context("GenerateAllInstanceNamesWithTemplatesIndexRanges", func() {
+		It("without templatesIndexRanges", func() {
+			parentName := "foo"
+			templatesFoo := &workloads.InstanceTemplate{
+				Name:     "foo",
+				Replicas: pointer.Int32(1),
+			}
+			templateBar := &workloads.InstanceTemplate{
+				Name:     "bar",
+				Replicas: pointer.Int32(2),
+			}
+			var templates []InstanceTemplate
+			templates = append(templates, templatesFoo, templateBar)
+			offlineInstances := []string{"foo-bar-1", "foo-0"}
+			instanceNameList := GenerateAllInstanceNames(parentName, 5, templates, offlineInstances)
+
+			podNamesExpected := []string{"foo-1", "foo-2", "foo-bar-0", "foo-bar-2", "foo-foo-0"}
+			Expect(instanceNameList).Should(Equal(podNamesExpected))
+		})
+		It("with templatesIndexRanges", func() {
+			parentName := "foo"
+			templatesFoo := &workloads.InstanceTemplate{
+				Name:     "foo",
+				Replicas: pointer.Int32(1),
+			}
+			templateBar := &workloads.InstanceTemplate{
+				Name:     "bar",
+				Replicas: pointer.Int32(2),
+			}
+			templateIndexRanges := []workloads.InstanceTemplateIndexRanges{
+				{
+					Name:        "",
+					IndexRanges: []string{"1-2"},
+				},
+				{
+					Name:        "foo",
+					IndexRanges: []string{"0-0"},
+				},
+				{
+					Name:        "bar",
+					IndexRanges: []string{"0-0", "2-2"},
+				},
+			}
+			var templates []InstanceTemplate
+			templates = append(templates, templatesFoo, templateBar)
+			instanceNameList, err := GenerateAllInstanceNamesWithTemplatesIndexRanges(parentName, 5, templates, nil, templateIndexRanges)
+			Expect(err).Should(BeNil())
+
+			podNamesExpected := []string{"foo-1", "foo-2", "foo-bar-0", "foo-bar-2", "foo-foo-0"}
+			Expect(instanceNameList).Should(Equal(podNamesExpected))
+		})
+	})
+
+	Context("GetIndexPointsByTemplateName", func() {
+		It("should work well", func() {
+			templateIndexRanges := []workloads.InstanceTemplateIndexRanges{
+				{
+					Name:        "",
+					IndexRanges: []string{"1-2"},
+				},
+				{
+					Name:        "foo",
+					IndexRanges: []string{"0-0"},
+				},
+				{
+					Name:        "bar",
+					IndexRanges: []string{"0-0", "2-2"},
+				},
+			}
+			templateNameDefault := ""
+			templateNameFoo := "foo"
+			templateNameBar := "bar"
+			templateNameNotFound := "foobar"
+
+			indexPointsDefault, err := GetIndexPointsByTemplateName(templateIndexRanges, templateNameDefault)
+			Expect(err).Should(BeNil())
+			indexPointsDefaultExpected := []int32{1, 2}
+			Expect(indexPointsDefault).Should(Equal(indexPointsDefaultExpected))
+
+			indexPointsFoo, err := GetIndexPointsByTemplateName(templateIndexRanges, templateNameFoo)
+			Expect(err).Should(BeNil())
+			indexPointsFooExpected := []int32{0}
+			Expect(indexPointsFoo).Should(Equal(indexPointsFooExpected))
+
+			indexPointsBar, err := GetIndexPointsByTemplateName(templateIndexRanges, templateNameBar)
+			Expect(err).Should(BeNil())
+			indexPointsBarExpected := []int32{0, 2}
+			Expect(indexPointsBar).Should(Equal(indexPointsBarExpected))
+
+			indexPointsNotFound, err := GetIndexPointsByTemplateName(templateIndexRanges, templateNameNotFound)
+			Expect(indexPointsNotFound).Should(BeNil())
+			errExpected := fmt.Errorf("template %s not found", templateNameNotFound)
+			Expect(err).Should(Equal(errExpected))
+		})
+	})
+
+	Context("GetTemplateIndexRangesByTemplateName", func() {
+		It("should work well", func() {
+			templateIndexRanges := []workloads.InstanceTemplateIndexRanges{
+				{
+					Name:        "",
+					IndexRanges: []string{"1-2"},
+				},
+				{
+					Name:        "foo",
+					IndexRanges: []string{"0-0"},
+				},
+				{
+					Name:        "bar",
+					IndexRanges: []string{"0-0", "2-2"},
+				},
+			}
+			templateNameDefault := ""
+			templateNameFoo := "foo"
+			templateNameBar := "bar"
+			templateNameNotFound := "foobar"
+
+			indexRangesDefault, err := GetTemplateIndexRangesByTemplateName(templateIndexRanges, templateNameDefault)
+			Expect(err).Should(BeNil())
+			indexRangesDefaultExpected := []string{"1-2"}
+			Expect(indexRangesDefault).Should(Equal(indexRangesDefaultExpected))
+
+			indexRangesFoo, err := GetTemplateIndexRangesByTemplateName(templateIndexRanges, templateNameFoo)
+			Expect(err).Should(BeNil())
+			indexRangesFooExpected := []string{"0-0"}
+			Expect(indexRangesFoo).Should(Equal(indexRangesFooExpected))
+
+			indexRangesBar, err := GetTemplateIndexRangesByTemplateName(templateIndexRanges, templateNameBar)
+			Expect(err).Should(BeNil())
+			indexRangesBarExpected := []string{"0-0", "2-2"}
+			Expect(indexRangesBar).Should(Equal(indexRangesBarExpected))
+
+			indexRangesNotFound, err := GetTemplateIndexRangesByTemplateName(templateIndexRanges, templateNameNotFound)
+			Expect(indexRangesNotFound).Should(BeNil())
+			errExpected := fmt.Errorf("template %s not found", templateNameNotFound)
+			Expect(err).Should(Equal(errExpected))
+		})
+	})
+
+	Context("ConvertIndexRangesToIndexPoints", func() {
+		It("should work well", func() {
+			indexRanges := []string{"0-0", "2-4", "6-6"}
+			indexPoints, err := ConvertIndexRangesToIndexPoints(indexRanges)
+			Expect(err).Should(BeNil())
+			sets.NewInt32(indexPoints...).Equal(sets.NewInt32(0, 2, 3, 4, 6))
+		})
+		It("must have only one - character", func() {
+			indexRanges := []string{"0-0", "2-4-6"}
+			indexPoints, err := ConvertIndexRangesToIndexPoints(indexRanges)
+			errExpected := fmt.Errorf("indexRanges must have only one - character, but now have %v", 3)
+			Expect(err).Should(Equal(errExpected))
+			Expect(indexPoints).Should(BeNil())
+		})
+		It("leftNumber must is number character", func() {
+			indexRanges := []string{"0-0", "e-4"}
+			indexPoints, err := ConvertIndexRangesToIndexPoints(indexRanges)
+			atoiErrExpected := fmt.Errorf("strconv.Atoi: parsing \"%v\": invalid syntax", "e")
+			errExpected := fmt.Errorf("indexRanges's leftNumber must is number character, but now is %v and err is %v", "e", atoiErrExpected)
+			Expect(err).Should(Equal(errExpected))
+			Expect(indexPoints).Should(BeNil())
+		})
+		It("rightNumber must is number character", func() {
+			indexRanges := []string{"0-0", "1-s"}
+			indexPoints, err := ConvertIndexRangesToIndexPoints(indexRanges)
+			atoiErrExpected := fmt.Errorf("strconv.Atoi: parsing \"%v\": invalid syntax", "s")
+			errExpected := fmt.Errorf("indexRanges's rightNumber must is number character, but now is %v and err is %v", "s", atoiErrExpected)
+			Expect(err).Should(Equal(errExpected))
+			Expect(indexPoints).Should(BeNil())
+		})
+		It("rightNumber must >= leftNumber", func() {
+			indexRanges := []string{"0-0", "4-2"}
+			indexPoints, err := ConvertIndexRangesToIndexPoints(indexRanges)
+			errExpected := fmt.Errorf("indexRanges's rightNumber(%v) must >= leftNumber(%v)", 2, 4)
+			Expect(err).Should(Equal(errExpected))
+			Expect(indexPoints).Should(BeNil())
 		})
 	})
 
