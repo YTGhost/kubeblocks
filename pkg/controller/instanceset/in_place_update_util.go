@@ -300,13 +300,13 @@ func getPodUpdatePolicy(its *workloads.InstanceSet, pod *corev1.Pod) (PodUpdateP
 	if err != nil {
 		return NoOpsPolicy, err
 	}
-	templateList := buildInstanceTemplateExts(itsExt)
+	templateList := BuildInstanceTemplateExts(itsExt)
 	parentName, _ := ParseParentNameAndOrdinal(pod.Name)
 	templateName, _ := strings.CutPrefix(parentName, its.Name)
 	if len(templateName) > 0 {
 		templateName, _ = strings.CutPrefix(templateName, "-")
 	}
-	index := slices.IndexFunc(templateList, func(templateExt *instanceTemplateExt) bool {
+	index := slices.IndexFunc(templateList, func(templateExt *InstanceTemplateExt) bool {
 		return templateName == templateExt.Name
 	})
 	if index < 0 {
